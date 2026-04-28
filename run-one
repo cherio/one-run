@@ -1,0 +1,169 @@
+#!/bin/sh
+
+unset debug_file_path # Path to the debug file
+unset lock_wait # run-this-one: max time to wait for the lock to become available before giving up
+unset kill_wait # run-this-one: send SIGKILL to the lock holder after this secs
+unset lock_token # Use this token instead of calculating user command hash
+unset flock_err_exit_code # Custom flock error exit code
+unset terminate_others # This flag is set when either called as run-this-one or '-x' is specified
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	-E) { shift; flock_err_exit_code="$1"; shift; } ;; # Custom flock error exist code
+	-D) { shift; debug_file_path="$1"; shift; } ;; #
+	-w) { shift; lock_wait="$1"; shift; } ;; # used with run-this-one
+	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
+	-T) { shift; lock_token="$1"; shift; } ;; #
+	-x) { shift; terminate_others="term"; } ;; # force the priviledged run-this-one
+	'') shift ;; # Ignore empty arguments
+	--) { shift; break; } ;; # The rest is the user supplied command line
+	*) { break; } ;; # Beginning of the user supplied command line
+	esac
+done
+
+_debug() {
+	[ -n "$debug_file_path" ] && echo "$1" >> "$debug_file_path"
+	[ -n "$2" ] && { [ "$2" != '0' ] && echo "$1" >&2; exit "$2"; }
+}
+
+[ $# -eq 0 ] && _debug "ERROR: no arguments specified" 1
+
+: "${flock_err_exit_code:=122}" # When undefined, set the default
+
+unset lock_file_dir # Lock file directory
+unset uid # System user ID
+
+# Make an attempt to prepare a given directory to store command hashes
+try_global_dir() {
+	_dir="$1" # Try this directory
+	# With one system call read both the permissions and owner of the directory
+	_dir_stat="$(find "$_dir" -maxdepth 0 -type d -printf '%m %U' 2>/dev/null)" # e.g. "755 bob"
+	if [ -z "$_dir_stat" ]; then # the directory doesn't exist - try to create it
+		if mkdir -m 700 "$_dir" 2>/dev/null; then
+			lock_file_dir="$_dir"
+		fi
+	elif [ "${_dir_stat##* }" = "${uid:=$(id -u)}" ]; then # this is a DIR with the matching owner
+		if [ "${_dir_stat%% *}" = "700" ] || chmod 700 "$_dir" 2>/dev/null; then # perm mask 700
+			lock_file_dir="$_dir"
+		fi
+	fi
+	[ -n "$lock_file_dir" ]
+}
+
+# Make an attempt to create a hash directory in XDG_RUNTIME_DIR
+prog_name="one-run"
+xdg_runtime_dir="${XDG_RUNTIME_DIR:-"/run/user/${uid:=$(id -u)}"}/$prog_name"
+if [ -d "$xdg_runtime_dir" ] || mkdir -m 700 "$xdg_runtime_dir" 2>/dev/null; then
+	lock_file_dir="$xdg_runtime_dir"
+else
+	# Make an attempt to create a hash directory in /dev/shm
+	try_global_dir "/dev/shm/${prog_name}_${uid:=$(id -u)}" ||
+		# Try creating it in /tmp; let's hope it's mounted as tmpfs
+		try_global_dir "/tmp/${prog_name}_${uid}" ||
+		# Sadly, this system doesn't see to be suitable - QUIT
+		_debug "Failed to setup lock file" "$flock_err_exit_code"
+fi
+
+[ -n "$lock_file_dir" ] ||
+	_debug "Failed to identify lock file directory" "$flock_err_exit_code"
+
+# If custom command id token is not provided use command signature
+lock_file_base="$(printf "%s" "${lock_token:=$*}" | sha256sum)}" # Hash the id token
+lock_file_path="$lock_file_dir/${lock_file_base%% *}" # Ignore whitespace and what follows
+_debug "Lock file: $lock_file_path"
+
+unset flock_exit_code
+# Waits for the semaphore to acquire the lock and run user command
+exec_with_flock() { # This function only returns if lock was unsuccessful
+	_flock_wait="$1"; shift # Wait time to acquire the lock, can be 0
+	flock_exit_code="$flock_err_exit_code" # exit code in case redirection fails
+	{ # Acquire the lock and run the user command
+		flock -x -w "$_flock_wait" -E "$flock_err_exit_code" 9 # Acquire the lock
+		flock_exit_code=$? # This is either 0 or $flock_err_exit_code
+		if [ "$flock_exit_code" -eq 0 ]; then # We successfully acquired the lock
+			exec "$@" # Execute the user command
+		fi
+	} 9>"$lock_file_path"
+}
+
+# The action is determined from either the symbolic link to the utility or from -x parameter
+if [ "${0##*/}" = "run-this-one" ]; then
+	terminate_others="term"
+fi
+
+_debug "Terminate others: ${terminate_others:-spare}[$$]: $*"
+
+if [ -z "$terminate_others" ]; then
+	# Lock the semaphore and run the command
+	exec_with_flock 0 "$@"
+	# We are here it means flock failed. That's okay, it happens
+	_debug "Another process is already running" "$flock_exit_code"
+else
+	# Stop other process instances and execute this one
+	[ -n "$lock_wait" ] && quit_after="$(date -d "+$lock_wait sec" +%s)"
+	[ -n "$kill_wait" ] && kill_after="$(date -d "+$kill_wait sec" +%s)"
+	# _debug "quit_after: $quit_after, kill_after: $kill_after"
+
+	fuser_signal="TERM"
+	pause_secs=0
+	# Deadline for when when no one holds the lock but we can't acquire it
+	unset issue1_limit
+
+	while :; do
+		# This call does not return if the lock is acquired successfully
+		exec_with_flock "$pause_secs" "$@"
+
+		[ "$pause_secs" -lt 20 ] && pause_secs="$((pause_secs+1))"
+		time_now="$(date +%s)"
+
+		# If a wait timeout was specified, check if we've exceeded it
+		if [ -n "$lock_wait" ]; then
+			if [ "$quit_after" -le "$time_now" ]; then
+				# We waited too long for the lock to be acquired
+				_debug "Could not obtain the lock in time" "$flock_exit_code"
+			elif [ "$quit_after" -lt "$((time_now + pause_secs))" ]; then
+				# No need to pause for longer than the timeout limit
+				pause_secs="$((quit_after - time_now))"
+			fi
+		fi
+
+		# Check if SIGKILL needs to be sent
+		if [ -n "$kill_wait" ]; then
+			if [ "$kill_after" -le "$time_now" ]; then # Time to kill other process instances
+				fuser_signal="KILL" # Switch to sending SIGKILL this point on
+				pause_secs=1 # Reset signal frequency interval
+				_debug "Time to send SIGKILL"
+				unset kill_wait # This check is no longer needed - disable
+			elif [ "$kill_after" -lt "$((time_now + pause_secs))" ]; then
+				# No need to pause for longer than the timeout limit
+				pause_secs="$((kill_after - time_now))"
+			fi
+		fi
+
+		# Identify the other processes that hold the lock
+		pids_to_kill="$( # This method is orders of magnitude faster than using lsof or fuser
+			find /proc -maxdepth 1 -name '[0-9]*' -uid "${uid:=$(id -u)}" -printf '%p/fd/9\n' 2>/dev/null |
+				xargs stat -c '%N' 2>/dev/null |
+				grep -F "$lock_file_path" |
+				grep -oP "(?<=/proc/)\d+" | paste -sd " " -
+		)"
+
+		# Terminate other process instances (if any) that hold the lock
+		if [ -n "$pids_to_kill" ]; then
+			_debug "Sending signal $fuser_signal to $pids_to_kill"
+			kill -s "$fuser_signal" $pids_to_kill
+			unset issue1_limit
+		else
+			# Suspisious state: no other process seems to be holding the lock but the lock could not be acquired
+			if [ -z "$issue1_limit" ]; then # Set the time limit
+				issue1_limit="$(date -d "+300 sec" +%s)" # bail in 5 min
+				_debug "Abnormality: no other process seems to be holding the lock "\
+					"and yet the lock could not be acquired" # ¯\_(ツ)_/¯
+			elif [ "$issue1_limit" -le "$time_now" ]; then
+				# Something's fishy. Bailing to prevent an infinite loop
+				_debug "Abnormality persists, giving up" 1
+			fi
+		fi
+
+	done
+fi

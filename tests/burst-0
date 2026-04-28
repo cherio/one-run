@@ -1,0 +1,3 @@
+#!/bin/sh
+PATH="$(realpath "$(dirname "$0")/.."):$PATH"
+keep-running -R 0:500 -D /dev/stderr perl -e 'my $t=rand(1.2); print "$t\n"; system("sleep $t")'

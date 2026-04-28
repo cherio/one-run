@@ -1,0 +1,121 @@
+#!/bin/sh
+
+unset debug_file_path # Log debug information in it
+unset respawn_count_max # Maximum number of times to respawn the process
+unset rate_limit_spec # User command rate limit spec, format: <bursts>:<rate_ms>
+unset run_until # values 's' or 'f' mean run until success|failure
+unset fail_exit_code # custom exit code upon failure
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	-D) { shift; debug_file_path="$1"; shift; } ;; #
+	-r) { shift; respawn_count_max="$1"; shift; } ;; #
+	-R) { shift; rate_limit_spec="$1"; shift; } ;; # <bursts>:<rate_ms>
+	-u) { shift; run_until="$1"; shift; } ;; # s|f -> run until success|failure
+	-E) { shift; fail_exit_code="$1"; shift; } ;; # exit code upon failure
+	'') shift ;; # Ignore empty arguments
+	--) { shift; break; } ;; # The rest is the user supplied command line
+	*) { break; } ;; # Beginning of the user supplied command line
+	esac
+done
+
+_debug() {
+	[ -n "$debug_file_path" ] && echo "$1" >> "$debug_file_path"
+	[ -n "$2" ] && { [ "$2" != '0' ] && echo "$1" >&2; exit "$2"; }
+}
+
+: "${fail_exit_code:=123}" # default fail exit code
+
+[ $# -eq 0 ] && _debug "ERROR: no arguments specified" "$fail_exit_code"
+
+# Using fast Exponentially Weighted Moving Average with smoothing factor for rate limiting
+unset ewma_factor # Smoothing factor, allowed burst number before throttling
+unset ewma_rate_ms # When bursts are used up, throttle execution at this rate (ms)
+if [ -n "$rate_limit_spec" ]; then # Spec format: <bursts>:<rate_ms>
+	ewma_factor="${rate_limit_spec%%:*}" # Extract prefix - burst number/smoothing factor
+	ewma_rate_ms="${rate_limit_spec##*:}" # Extract suffix - the throttle rate (ms)
+fi
+ewma_factor="${ewma_factor:-16}" # Default bursts (smoothing factor) to 16
+ewma_rate_ms="${ewma_rate_ms:-1000}" # Default throttle rate to 1000ms
+
+if [ "$ewma_factor" -le 1 ]; then
+	# minimum value of the weighted moving sum, used for throttling
+	rate_sum_min="$ewma_rate_ms"
+	# initial weighted moving sum value that allows for "ewma_factor" bursts
+	rate_sum_initial="$ewma_rate_ms"
+else
+	burst_max="$ewma_factor" # technically burst limit is independent from the smoothing factor
+	rate_sum_min="$((ewma_rate_ms * burst_max))"
+	rate_sum_initial="$(perl -e "print int($rate_sum_min*($ewma_factor/($ewma_factor-1))**$ewma_factor)")"
+fi
+
+[ -z "$rate_sum_initial" ] &&
+	_debug "ERROR: invalid smoothing factor or minimum throttled rate" "$fail_exit_code"
+
+# Evaluate stop condition
+case "$run_until" in
+	's') stop_on="success" ;; #
+	'f') stop_on="failure" ;; #
+	'') ;; #
+	*) _debug "ERROR: '-u' can be 's' or 'f'" "$fail_exit_code" ;;
+esac
+
+if [ -z "$stop_on" ]; then
+	action="${0##*-}" # Symbolic link name determines the action
+	case "$action" in
+		'success'|'failure') stop_on="$action" ;;
+	esac
+fi
+
+_debug "stop_on: $stop_on, EWMA bursts/rate: $ewma_factor/$ewma_rate_ms"
+
+rate_sum_current="$rate_sum_initial" # start with the value that allows for "ewma_factor" bursts
+respawn_count=0
+unset user_cmd_ts_end_ns
+
+while :; do
+	# Record the timestamp of the start of the user command execution
+	user_cmd_ts_start_ns="${user_cmd_ts_end_ns:-$(date +%s%N)}"
+	user_cmd_ts_start_ms="${user_cmd_ts_start_ns%??????}" # millisecond precision
+
+	"$@" # Running user command here
+	user_cmd_exit_code="$?"
+
+	if [ -n "$stop_on" ]; then
+		if [ "$user_cmd_exit_code" -eq 0 ]; then
+			[ "$stop_on" = "success" ] && _debug "We have suffered success" 0
+		elif [ "$stop_on" = "failure" ]; then
+			_debug "We have achieved failure: $user_cmd_exit_code"
+			exit "$user_cmd_exit_code"
+		fi
+	fi
+
+	# Reached the maximum number of restarts
+	if [ -n "$respawn_count_max" ]; then
+		respawn_count="$((respawn_count + 1))"
+	 	[ "$respawn_count" -ge "$respawn_count_max" ] &&
+			_debug "Exceeded maximum number of restarts: $respawn_count_max" "$fail_exit_code"
+	fi
+
+	# Make sure the command doesn't get executed too frequently
+	user_cmd_ts_end_ns="$(date +%s%N)"
+	user_cmd_ts_end_ms="${user_cmd_ts_end_ns%??????}" # millisecond precision
+	user_cmd_dur_ms="$((user_cmd_ts_end_ms - user_cmd_ts_start_ms))" # runtime duration
+	[ "$ewma_factor" -le 1 ] && rate_sum_current="$user_cmd_dur_ms"
+	[ "$ewma_factor" -gt 1 ] &&
+		rate_sum_current="$((user_cmd_dur_ms + rate_sum_current * (ewma_factor - 1) / ewma_factor))"
+
+	# When the rate exceeds certain threshold, throttle to prevent execution more frequently than 1/sec
+	if [ "$rate_sum_current" -lt "$rate_sum_min" ] && [ "$user_cmd_dur_ms" -lt "$ewma_rate_ms" ]; then
+		sleep_dur_ms="$((ewma_rate_ms - user_cmd_dur_ms))" # Pause for this long
+		_debug "Throttling: cmd duration: $user_cmd_dur_ms, sleep: $sleep_dur_ms"
+		perl -e "select undef,undef,undef,$sleep_dur_ms/1000.0"
+		rate_sum_current="$((rate_sum_current + sleep_dur_ms))" # Ammend the weighted moving sum
+		user_cmd_ts_end_ns="$(date +%s%N)"
+	elif [ "$rate_sum_current" -gt "$rate_sum_initial" ]; then
+		# Rate recovered. Do not allow more bursts than the maximum.
+		rate_sum_current="$rate_sum_initial"
+	# else
+	# 	_debug "Allowed: sum: $rate_sum_current, dur: $user_cmd_dur_ms"
+	fi
+done

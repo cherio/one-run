@@ -1,0 +1,151 @@
+#!/bin/sh
+
+unset target_root # This directory is be treated as file system root "/"
+unset bin_dir # Target root directory in the file system e.g. "/usr/bin" or "/usr/local/bin"
+unset show_help
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	-r) { shift; target_root="$1"; shift; } ;; #
+	-b) { shift; bin_dir="$1"; shift; } ;; #
+	-h|--help) { shift; show_help=1; } ;; #
+	*) { echo "Unknown parameter" >&2; exit 1; } ;; # Beginning of the user supplied command line
+	esac
+done
+
+_show_help() {
+	cat <<HELP
+
+Usage: ${0##*/} [-r target_root] [-b bin_dir]
+
+Options
+    -r DIR
+        Assume this directory is the root of the file system "/".
+    -b DIR
+        Most common options are "/usr/bin" or "/usr/local/bin".
+        The default is "/usr/bin".
+    -h | --help
+        Display this help message
+
+Description
+    This script installs the utility assuming file system root DIR is target_root.
+
+    MAN pages are installed here:
+    <target_root>/usr/share/man/man1
+
+    The executables are installed here:
+    <target_root>/usr/bin
+
+HELP
+	exit 0
+}
+
+[ -n "$show_help" ] && _show_help
+
+[ -d "$target_root" ] || {
+	printf "Error: bad <target_root>\n\n" >&2;
+	_show_help;
+}
+target_root="$(realpath "$target_root")"
+echo "Target root: $target_root"
+
+: "${bin_dir:=/usr/bin}"
+echo "BIN directory: $bin_dir"
+
+[ -d "$target_root" ] || mkdir -p "$target_root"
+[ -d "$target_root" ] || { echo "Error: Failed to create $target_root" >&2; exit 1; }
+
+scripts_dir="$(dirname "$0")"
+proj_dir="$(realpath "$scripts_dir/..")"
+echo "Sorce project directory: $proj_dir"
+
+# Symlinks
+links="$(cat <<LINKS
+keep-running run-constantly
+keep-running run-until-failure
+keep-running run-until-success
+keep-one-running run-one-constantly
+keep-one-running run-one-until-failure
+keep-one-running run-one-until-success
+run-one run-this-one
+LINKS
+)"
+
+# Safe symlink creation
+_install_symlink() {
+	target_file="$1"; shift
+	slink_file="$1"; shift
+	if [ -e "$slink_file" ]; then
+		if [ "$(readlink "$slink_file")" = "$target_file" ]; then
+			echo "Symlink already exists: $slink_file -> $target_file"
+		else
+			echo "Error! Symlink mismatch or unexpected file: $slink_file" >&2
+		fi
+	else
+		ln -s "$target_file" "$slink_file"
+		echo "Created symlink: $slink_file -> $target_file"
+	fi
+}
+
+# Install the scripts
+bin_target_dir="$target_root$bin_dir"
+[ -d "$bin_target_dir" ] || mkdir -p "$bin_target_dir"
+[ -d "$bin_target_dir" ] || { echo "Error: Failed to create $bin_target_dir" >&2; exit 1; }
+
+cd "$proj_dir" ||
+	{ echo "Error: Failed cd into the project directory" >&2; exit 1; }
+
+echo "Installing scripts in: $bin_target_dir"
+
+(cat <<SCRIPTS
+keep-one-running
+keep-running
+run-one
+SCRIPTS
+) | xargs install -v --compare --preserve-timestamps -m 755 -t "$bin_target_dir/"
+
+cd "$bin_target_dir" ||
+	{ echo "Error: Failed cd into $bin_target_dir" >&2; exit 1; }
+
+echo "Installing script symlinks"
+echo "$links" | while read -r link; do
+	_install_symlink "${link% *}" "${link#* }"
+done
+
+# Regenerate man pages
+"$proj_dir/scripts"/man-gen
+
+# Install man files
+man_target_dir="$target_root/usr/share/man/man1"
+[ -d "$man_target_dir" ] || mkdir -p "$man_target_dir"
+[ -d "$man_target_dir" ] || { echo "Error: Failed to create $man_target_dir" >&2; exit 1; }
+
+cd "$proj_dir/man" ||
+	{ echo "Error: Failed CD into the man directory" >&2; exit 1; }
+
+echo "Installing man files in: $man_target_dir"
+
+(cat <<MANFILES
+keep-one-running.1
+keep-running.1
+run-one.1
+MANFILES
+) | while read -r man_file; do
+	target_man="$man_target_dir/$man_file.gz"
+	if ! [ -e "$target_man" ] || [ "./$man_file" -nt "$target_man" ]; then
+		echo "Installing: $man_file -> $target_man"
+		gzip -c "./$man_file" > "$target_man"
+		chmod 644 "$target_man"
+		touch -r "./$man_file" "$target_man"
+	else
+		echo "Already up-to-date: $target_man"
+	fi
+done
+
+cd "$man_target_dir" ||
+	{ echo "Error: Failed CD into the man target directory" >&2; exit 1; }
+
+echo "Installing man page symlinks"
+echo "$links" | while read -r link; do
+	_install_symlink "${link% *}.1.gz" "${link#* }.1.gz"
+done

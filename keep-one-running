@@ -1,0 +1,62 @@
+#!/bin/sh
+
+unset run_this_one # run-this-one flag
+unset debug_file_path # Log debug information in it
+unset respawn_count_max # Maximum number of times to respawn the process
+unset rate_limit_spec # User command rate limit spec, format: <bursts>:<rate_ms>
+unset fail_exit_code # Custom flock error exit code
+unset lock_wait # run-this-one: max time to wait for the lock before giving up
+unset kill_wait # run-this-one: send SIGKILL to the lock holder after this secs
+unset lock_token # Use this token instead of calculating user command hash
+unset run_until # values 's' or 'f' mean run until success|failure
+
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	# used by both run-one and keep-running
+	-D) { shift; debug_file_path="$1"; shift; } ;; #
+	# use by run-one
+	-x) { shift; run_this_one='-x'; } ;; # run-this-one
+	-E) { shift; fail_exit_code="$1"; shift; } ;; # Custom flock error exist code
+	-w) { shift; lock_wait="$1"; shift; } ;; # used with run-this-one
+	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
+	-T) { shift; lock_token="$1"; shift; } ;; #
+	# used by keep-running
+	-r) { shift; respawn_count_max="$1"; shift; } ;; #
+	-R) { shift; rate_limit_spec="$1"; shift; } ;; # <bursts>:<rate_ms>
+	-u) { shift; run_until="$1"; shift; } ;; # s|f -> run until success|failure
+	# other options
+	'') shift ;; # Ignore empty arguments
+	--) { shift; break; } ;; # The rest is the user supplied command line
+	*) { break; } ;; # Beginning of the user supplied command line
+	esac
+done
+
+_debug() {
+	[ -n "$debug_file_path" ] && echo "$1" >> "$debug_file_path"
+	[ -n "$2" ] && { [ "$2" != '0' ] && echo "$1" >&2; exit "$2"; }
+}
+
+[ $# -eq 0 ] && _debug "ERROR: no arguments specified" 1
+
+action="${0##*/}" # Symbolic link name is used for action selection
+
+if [ -z "$run_until" ]; then
+	case "$action" in
+		run-one-until-failure) run_until="f" ;;
+		run-one-until-success) run_until="s" ;;
+		keep-one-running|run-one-constantly) unset run_until ;;
+		*) _debug "ERROR: unknown action '$action'" 1 ;;
+	esac
+fi
+
+_debug "Action: $action, run_until: $run_until"
+
+exec
+	run-one $run_this_one \
+	-T "${lock_token:-$*}" \
+	-w "$lock_wait" -k "$kill_wait" -- \
+	-E "$fail_exit_code" -D "$debug_file_path" \
+	keep-running -u "$run_until" \
+	-r "$respawn_count_max" -R "$rate_limit_spec" \
+	-E "$fail_exit_code" -D "$debug_file_path" -- \
+	"$@"
