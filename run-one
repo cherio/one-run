@@ -81,6 +81,7 @@ exec_with_flock() { # This function only returns if lock was unsuccessful
 		flock -x -w "$_flock_wait" -E "$flock_err_exit_code" 9 # Acquire the lock
 		flock_exit_code=$? # This is either 0 or $flock_err_exit_code
 		if [ "$flock_exit_code" -eq 0 ]; then # We successfully acquired the lock
+			_debug "Lock acquired, running command: $*"
 			exec "$@" # Execute the user command
 		fi
 	} 9>"$lock_file_path"
@@ -104,7 +105,7 @@ else
 	[ -n "$kill_wait" ] && kill_after="$(date -d "+$kill_wait sec" +%s)"
 	# _debug "quit_after: $quit_after, kill_after: $kill_after"
 
-	fuser_signal="TERM"
+	kill_signal="TERM"
 	pause_secs=0
 	# Deadline for when when no one holds the lock but we can't acquire it
 	unset issue1_limit
@@ -113,7 +114,7 @@ else
 		# This call does not return if the lock is acquired successfully
 		exec_with_flock "$pause_secs" "$@"
 
-		[ "$pause_secs" -lt 20 ] && pause_secs="$((pause_secs+1))"
+		[ "$pause_secs" -lt 20 ] && pause_secs="$((pause_secs + 1))"
 		time_now="$(date +%s)"
 
 		# If a wait timeout was specified, check if we've exceeded it
@@ -130,7 +131,7 @@ else
 		# Check if SIGKILL needs to be sent
 		if [ -n "$kill_wait" ]; then
 			if [ "$kill_after" -le "$time_now" ]; then # Time to kill other process instances
-				fuser_signal="KILL" # Switch to sending SIGKILL this point on
+				kill_signal="KILL" # Switch to sending SIGKILL this point on
 				pause_secs=1 # Reset signal frequency interval
 				_debug "Time to send SIGKILL"
 				unset kill_wait # This check is no longer needed - disable
@@ -141,24 +142,23 @@ else
 		fi
 
 		# Identify the other processes that hold the lock
-		pids_to_kill="$( # This method is orders of magnitude faster than using lsof or fuser
-			find /proc -maxdepth 1 -name '[0-9]*' -uid "${uid:=$(id -u)}" -printf '%p/fd/9\n' 2>/dev/null |
+		pids_to_kill="$( # Scanning /proc is orders of magnitude faster than using lsof or fuser
+			find /proc -maxdepth 1 -name '[1-9]*' -uid "${uid:=$(id -u)}" -printf '%p/fd/9\n' 2>/dev/null |
 				xargs stat -c '%N' 2>/dev/null |
-				grep -F "$lock_file_path" |
-				grep -oP "(?<=/proc/)\d+" | paste -sd " " -
+				grep -F "' -> '$lock_file_path'" |
+				grep -oP "(?<=/proc/)\d+" # | paste -sd " " -
 		)"
 
 		# Terminate other process instances (if any) that hold the lock
 		if [ -n "$pids_to_kill" ]; then
-			_debug "Sending signal $fuser_signal to $pids_to_kill"
-			kill -s "$fuser_signal" $pids_to_kill
+			_debug "Sending signal $kill_signal to $pids_to_kill"
+			kill -s "$kill_signal" $pids_to_kill
 			unset issue1_limit
 		else
 			# Suspisious state: no other process seems to be holding the lock but the lock could not be acquired
 			if [ -z "$issue1_limit" ]; then # Set the time limit
 				issue1_limit="$(date -d "+300 sec" +%s)" # bail in 5 min
-				_debug "Abnormality: no other process seems to be holding the lock "\
-					"and yet the lock could not be acquired" # ¯\_(ツ)_/¯
+				_debug "Abnormality: no other process seems to be holding the lock and yet the lock could not be acquired" # ¯\_(ツ)_/¯
 			elif [ "$issue1_limit" -le "$time_now" ]; then
 				# Something's fishy. Bailing to prevent an infinite loop
 				_debug "Abnormality persists, giving up" 1
