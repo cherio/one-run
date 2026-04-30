@@ -1,13 +1,15 @@
 #!/bin/sh
 
 unset target_root # This directory is be treated as file system root "/"
-unset bin_dir # Target root directory in the file system e.g. "/usr/bin" or "/usr/local/bin"
+unset bin_dir # Target bin directory in the file system e.g. "/usr/bin" or "/usr/local/bin"
+unset man_dir # Target man directory in the file system e.g. "/usr/share/man" or "/usr/local/share/man1"
 unset show_help
 
 while [ $# -gt 0 ] ; do
 	case "$1" in
 	-r) { shift; target_root="$1"; shift; } ;; #
 	-b) { shift; bin_dir="$1"; shift; } ;; #
+	-m) { shift; man_dir="$1"; shift; } ;; #
 	-h|--help) { shift; show_help=1; } ;; #
 	*) { echo "Unknown parameter" >&2; exit 1; } ;; # Beginning of the user supplied command line
 	esac
@@ -24,6 +26,9 @@ Options
     -b DIR
         Most common options are "/usr/bin" or "/usr/local/bin".
         The default is "/usr/bin".
+    -m DIR
+        "man" pages target directory.
+        The default is "/usr/share/man/man1".
     -h | --help
         Display this help message
 
@@ -50,7 +55,7 @@ target_root="$(realpath "$target_root")"
 echo "Target root: $target_root"
 
 : "${bin_dir:=/usr/bin}"
-echo "BIN directory: $bin_dir"
+: "${man_dir:=/usr/share/man/man1}"
 
 [ -d "$target_root" ] || mkdir -p "$target_root"
 [ -d "$target_root" ] || { echo "Error: Failed to create $target_root" >&2; exit 1; }
@@ -88,6 +93,7 @@ _install_symlink() {
 }
 
 # Install the scripts
+echo "BIN directory: <root>/$bin_dir"
 bin_target_dir="$target_root$bin_dir"
 [ -d "$bin_target_dir" ] || mkdir -p "$bin_target_dir"
 [ -d "$bin_target_dir" ] || { echo "Error: Failed to create $bin_target_dir" >&2; exit 1; }
@@ -116,7 +122,8 @@ done
 "$proj_dir/scripts"/man-gen
 
 # Install man files
-man_target_dir="$target_root/usr/share/man/man1"
+echo "MAN directory: <root>$man_dir"
+man_target_dir="$target_root$man_dir"
 [ -d "$man_target_dir" ] || mkdir -p "$man_target_dir"
 [ -d "$man_target_dir" ] || { echo "Error: Failed to create $man_target_dir" >&2; exit 1; }
 
