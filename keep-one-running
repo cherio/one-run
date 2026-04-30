@@ -54,9 +54,9 @@ _debug "Action: $action, run_until: $run_until"
 exec
 	run-one $run_this_one \
 	-T "${lock_token:-$*}" \
-	-w "$lock_wait" -k "$kill_wait" -- \
+	-w "$lock_wait" -k "$kill_wait" \
 	-E "$fail_exit_code" -D "$debug_file_path" \
-	keep-running -u "$run_until" \
+	-- keep-running -u "$run_until" \
 	-r "$respawn_count_max" -R "$rate_limit_spec" \
-	-E "$fail_exit_code" -D "$debug_file_path" -- \
-	"$@"
+	-E "$fail_exit_code" -D "$debug_file_path" \
+	-- "$@"
