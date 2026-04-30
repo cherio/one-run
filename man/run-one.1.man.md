@@ -20,7 +20,7 @@ This utility prevents multiple instances of the same command from running concur
 To ensure only one instance runs at a time, this utility uses a flock-based semaphore. The unique ID for the lock is either specified on the command line using the **-T** parameter or generated automatically by hashing the user command line. The semaphore file is stored in one of the following directories in this order of preference:
 
 ```
-/$XDG_RUNTIME_DIR/one-run
+$XDG_RUNTIME_DIR/one-run
 /run/user/$UID/one-run
 /dev/shm/one-run_$UID
 /tmp/one-run_$UID
