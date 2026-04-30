@@ -46,6 +46,9 @@ The base form of utility simply keeps a program running, relaunching it whenever
 **-D PATH**
 : debug/log file path.
 
+**-h | --help**
+: Print help information
+
 # EXAMPLES
 
 **keep-running -R 10:2000 -r 2000 my-favorite-watchdog arg1**

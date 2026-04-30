@@ -8,11 +8,12 @@ unset fail_exit_code # custom exit code upon failure
 
 while [ $# -gt 0 ] ; do
 	case "$1" in
-	-D) { shift; debug_file_path="$1"; shift; } ;; #
 	-r) { shift; respawn_count_max="$1"; shift; } ;; #
 	-R) { shift; rate_limit_spec="$1"; shift; } ;; # <bursts>:<rate_ms>
 	-u) { shift; run_until="$1"; shift; } ;; # s|f -> run until success|failure
 	-E) { shift; fail_exit_code="$1"; shift; } ;; # exit code upon failure
+	-D) { shift; debug_file_path="$1"; shift; } ;; #
+	-h|--help) exec man -P cat "${0##*/}" ;; # Display help
 	'') shift ;; # Ignore empty arguments
 	--) { shift; break; } ;; # The rest is the user supplied command line
 	*) { break; } ;; # Beginning of the user supplied command line

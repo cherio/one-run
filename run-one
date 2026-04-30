@@ -15,6 +15,7 @@ while [ $# -gt 0 ] ; do
 	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
 	-T) { shift; lock_token="$1"; shift; } ;; #
 	-x) { shift; terminate_others="term"; } ;; # force the priviledged run-this-one
+	-h|--help) exec man -P cat "${0##*/}" ;; # Display help
 	'') shift ;; # Ignore empty arguments
 	--) { shift; break; } ;; # The rest is the user supplied command line
 	*) { break; } ;; # Beginning of the user supplied command line

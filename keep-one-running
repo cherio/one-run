@@ -12,11 +12,8 @@ unset run_until # values 's' or 'f' mean run until success|failure
 
 while [ $# -gt 0 ] ; do
 	case "$1" in
-	# used by both run-one and keep-running
-	-D) { shift; debug_file_path="$1"; shift; } ;; #
 	# use by run-one
 	-x) { shift; run_this_one='-x'; } ;; # run-this-one
-	-E) { shift; fail_exit_code="$1"; shift; } ;; # Custom flock error exist code
 	-w) { shift; lock_wait="$1"; shift; } ;; # used with run-this-one
 	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
 	-T) { shift; lock_token="$1"; shift; } ;; #
@@ -24,6 +21,10 @@ while [ $# -gt 0 ] ; do
 	-r) { shift; respawn_count_max="$1"; shift; } ;; #
 	-R) { shift; rate_limit_spec="$1"; shift; } ;; # <bursts>:<rate_ms>
 	-u) { shift; run_until="$1"; shift; } ;; # s|f -> run until success|failure
+	# used by both run-one and keep-running
+	-D) { shift; debug_file_path="$1"; shift; } ;; #
+	-E) { shift; fail_exit_code="$1"; shift; } ;; # Custom utility error exist code
+	-h|--help) exec man -P cat "${0##*/}" ;; # Display help
 	# other options
 	'') shift ;; # Ignore empty arguments
 	--) { shift; break; } ;; # The rest is the user supplied command line

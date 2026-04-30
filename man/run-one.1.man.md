@@ -51,6 +51,8 @@ Wait time can be limited with **-w**. In addition the other process can be termi
 **-D PATH**
 : debug/log file path
 
+**-h | --help**
+: Print help information
 
 # EXAMPLES
 

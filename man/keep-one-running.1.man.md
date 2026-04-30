@@ -83,6 +83,9 @@ Available options are the superset of options in **run-one** and **keep-running*
 ` `
 : In other words, if a command exits immediately, it is allowed to relaunch without delay for a total of BURST attempts. Once this limit is reached, the utility enforces a mandatory RATE (in milliseconds) sleep between subsequent restarts to throttle the execution speed.
 
+**-h | --help**
+: Print help information
+
 # EXAMPLES
 
 **run-one-until-success -R 1:20000 ncat -z -w5 my-host 443**
