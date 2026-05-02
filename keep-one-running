@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Yuri Cherio
 
 unset terminate_others # run-this-one flag
 unset debug_file_path # Log debug information in it

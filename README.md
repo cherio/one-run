@@ -80,3 +80,9 @@ affiliated with or derived from the original implementation.
 
 Most usage patterns should translate directly. Bugs and feature requests for
 this version should be directed to this project’s issue tracker.
+
+# License
+
+Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
+
+See the LICENSE file for the full license text.

@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Yuri Cherio
 
 unset debug_file_path # Log debug information in it
 unset respawn_count_max # Maximum number of times to respawn the process

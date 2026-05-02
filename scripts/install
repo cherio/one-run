@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Yuri Cherio
 
 unset target_root # This directory is be treated as file system root "/"
 unset bin_dir # Target bin directory in the file system e.g. "/usr/bin" or "/usr/local/bin"
