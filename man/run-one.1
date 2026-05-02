@@ -27,7 +27,7 @@ The semaphore file is stored in one of the following directories in this
 order of preference:
 .IP
 .EX
-/$XDG_RUNTIME_DIR/one\-run
+$XDG_RUNTIME_DIR/one\-run
 /run/user/$UID/one\-run
 /dev/shm/one\-run_$UID
 /tmp/one\-run_$UID
@@ -60,15 +60,21 @@ signature) previously launched by \f[B]run\-one\f[R] or
 equivalent to running \f[B]run\-this\-one\f[R]
 .TP
 \f[B]\-w SECONDS\f[R]
-(\f[B]run\-this\-one\f[R]) maximum time (in seconds) to wait for the
-lock to become available before giving up on acquiring the lock; only
-whole numbers are understood, decimals are not allowed
+maximum time (in seconds) to wait for the lock to become available
+before giving up on acquiring the lock; only whole numbers are
+understood, decimals are not allowed
 .TP
 \f[B]\-k SECONDS\f[R]
 (\f[B]run\-this\-one\f[R]) send \f[B]SIGKILL\f[R] to the other process
 instance that holds the lock holder after this many seconds of waiting
 for it to terminate gracefully with \f[B]SIGTERM\f[R]; only whole
 numbers are understood, decimals are not allowed
+.TP
+\f[B]\-a\f[R]
+run this invocation anyway, even if another process did not give up the
+lock in the given wait time.
+This invalidates the lock acquired by another process and creates a new
+lock file
 .TP
 \f[B]\-T TOKEN\f[R]
 use this token for the lock file name instead of calculating user
@@ -85,6 +91,9 @@ details)
 .TP
 \f[B]\-D PATH\f[R]
 debug/log file path
+.TP
+\f[B]\-h | \(enhelp\f[R]
+Print help information
 .SH EXAMPLES
 .IP
 .EX
@@ -132,5 +141,9 @@ Any other exit code indicates the status returned from the user command.
 \f[B]run\-one\-until\-failure\f[R](1),
 \f[B]run\-one\-until\-success\f[R](1), \f[B]run\-until\-failure\f[R](1),
 \f[B]run\-until\-success\f[R](1)
+.PP
+Full documentation and source code available at \c
+.UR https://github.com/user/project
+.UE \c
 .SH AUTHORS
 Yuri Cheromushnikov.

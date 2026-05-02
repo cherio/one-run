@@ -37,10 +37,13 @@ Wait time can be limited with **-w**. In addition the other process can be termi
 : terminates other commands with the identical command ID (or command signature) previously launched by **run-one** or **run-this-one**, locks the semaphore and runs this command; equivalent to running **run-this-one**
 
 **-w SECONDS**
-: (**run-this-one**) maximum time (in seconds) to wait for the lock to become available before giving up on acquiring the lock; only whole numbers are understood, decimals are not allowed
+: maximum time (in seconds) to wait for the lock to become available before giving up on acquiring the lock; only whole numbers are understood, decimals are not allowed
 
 **-k SECONDS**
 : (**run-this-one**) send `SIGKILL` to the other process instance that holds the lock holder after this many seconds of waiting for it to terminate gracefully with `SIGTERM`; only whole numbers are understood, decimals are not allowed
+
+**-a**
+: run this invocation anyway, even if another process did not give up the lock in the given wait time. This invalidates the lock acquired by another process and creates a new lock file
 
 **-T TOKEN**
 : use this token for the lock file name instead of calculating user command hash. This option is also used internally when running **keep-one-running cmd**, as this command variant internally runs as **run-one + keep-running + cmd** but needs a hash token for **cmd** and not **keep-running + cmd**
@@ -84,3 +87,5 @@ Any other exit code indicates the status returned from the user command.
 # SEE ALSO
 
 **flock**(1), **kill**(1), **sha256sum**(1), **keep-one-running**(1), **keep-running**(1), **run-constantly**(1), **run-one-constantly**(1), **run-one-until-failure**(1), **run-one-until-success**(1), **run-until-failure**(1), **run-until-success**(1)
+
+Full documentation and source code available at [https://github.com/user/project](https://github.com/user/project)

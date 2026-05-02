@@ -29,12 +29,19 @@ _debug() {
 
 [ $# -eq 0 ] && _debug "ERROR: no arguments specified" "$fail_exit_code"
 
+[ "${respawn_count_max##*[!0-9]}" = "$respawn_count_max" ] || _debug "Error: option -r requires an integer" 1
+
 # Using fast Exponentially Weighted Moving Average with smoothing factor for rate limiting
 unset ewma_factor # Smoothing factor, allowed burst number before throttling
 unset ewma_rate_ms # When bursts are used up, throttle execution at this rate (ms)
 if [ -n "$rate_limit_spec" ]; then # Spec format: <bursts>:<rate_ms>
 	ewma_factor="${rate_limit_spec%%:*}" # Extract prefix - burst number/smoothing factor
 	ewma_rate_ms="${rate_limit_spec##*:}" # Extract suffix - the throttle rate (ms)
+
+	if [ "${ewma_factor##*[!0-9]}" != "$ewma_factor" ] ||
+		[ "${ewma_rate_ms##*[!0-9]}" != "$ewma_rate_ms" ]; then
+		_debug "Error: option -R is invalid" 1
+	fi
 fi
 ewma_factor="${ewma_factor:-16}" # Default bursts (smoothing factor) to 16
 ewma_rate_ms="${ewma_rate_ms:-1000}" # Default throttle rate to 1000ms

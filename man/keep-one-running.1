@@ -97,6 +97,12 @@ instance that holds the lock holder after this many seconds of waiting
 for it to terminate gracefully with \f[B]SIGTERM\f[R]; only whole
 numbers are understood, decimals are not allowed
 .TP
+\f[B]\-a\f[R]
+run this invocation anyway, even if another process did not give up the
+lock in the given wait time.
+This invalidates the lock acquired by another process and creates a new
+lock file
+.TP
 \f[B]\-T TOKEN\f[R]
 use this token for the lock file name instead of calculating user
 command hash.
@@ -141,6 +147,9 @@ relaunch without delay for a total of BURST attempts.
 Once this limit is reached, the utility enforces a mandatory RATE (in
 milliseconds) sleep between subsequent restarts to throttle the
 execution speed.
+.TP
+\f[B]\-h | \(enhelp\f[R]
+Print help information
 .SH EXAMPLES
 .TP
 \f[B]run\-one\-until\-success \-R 1:20000 ncat \-z \-w5 my\-host 443\f[R]

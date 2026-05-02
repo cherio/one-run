@@ -1,6 +1,6 @@
 #!/bin/sh
 
-unset run_this_one # run-this-one flag
+unset terminate_others # run-this-one flag
 unset debug_file_path # Log debug information in it
 unset respawn_count_max # Maximum number of times to respawn the process
 unset rate_limit_spec # User command rate limit spec, format: <bursts>:<rate_ms>
@@ -9,13 +9,15 @@ unset lock_wait # run-this-one: max time to wait for the lock before giving up
 unset kill_wait # run-this-one: send SIGKILL to the lock holder after this secs
 unset lock_token # Use this token instead of calculating user command hash
 unset run_until # values 's' or 'f' mean run until success|failure
+unset run_anyway # run another instance after lock timeout no matter what
 
 while [ $# -gt 0 ] ; do
 	case "$1" in
 	# use by run-one
-	-x) { shift; run_this_one='-x'; } ;; # run-this-one
+	-x) { terminate_others="$1"; shift; } ;; # run-this-one
 	-w) { shift; lock_wait="$1"; shift; } ;; # used with run-this-one
 	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
+	-a) { run_anyway="$1"; shift; } ;;
 	-T) { shift; lock_token="$1"; shift; } ;; #
 	# used by keep-running
 	-r) { shift; respawn_count_max="$1"; shift; } ;; #
@@ -52,9 +54,9 @@ fi
 
 _debug "Action: $action, run_until: $run_until"
 
-exec run-one $run_this_one \
+exec run-one $terminate_others \
 	-T "${lock_token:-$*}" \
-	-w "$lock_wait" -k "$kill_wait" \
+	-w "$lock_wait" -k "$kill_wait" $run_anyway \
 	-E "$fail_exit_code" -D "$debug_file_path" \
 	-- keep-running -u "$run_until" \
 	-r "$respawn_count_max" -R "$rate_limit_spec" \

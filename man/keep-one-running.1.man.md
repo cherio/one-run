@@ -62,6 +62,9 @@ Available options are the superset of options in **run-one** and **keep-running*
 **-k SECONDS**
 : (**run-this-one**) send `SIGKILL` to the other process instance that holds the lock holder after this many seconds of waiting for it to terminate gracefully with `SIGTERM`; only whole numbers are understood, decimals are not allowed
 
+**-a**
+: run this invocation anyway, even if another process did not give up the lock in the given wait time. This invalidates the lock acquired by another process and creates a new lock file
+
 **-T TOKEN**
 : use this token for the lock file name instead of calculating user command hash. This option is also used internally when running **keep-one-running cmd**, as this command variant internally runs as **run-one + keep-running + cmd** but needs a hash token for **cmd** and not **keep-running + cmd**
 

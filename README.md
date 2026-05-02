@@ -4,7 +4,8 @@ A wrapper utility that prevents concurrent execution of a command by ensuring
 only a single instance runs at any given time. This utility is a from-scratch
 implementation designed to be CLI-compatible with the Ubuntu **run-one**
 utility by Dustin Kirkland. It can be used as a compatible replacement in
-typical scenarios while providing [additional features](ubuntu-run-one.md).
+typical scenarios while providing many [additional features and
+improvements](ubuntu-run-one.md).
 
 ## Main form
 
