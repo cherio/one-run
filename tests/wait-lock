@@ -1,0 +1,25 @@
+#!/bin/sh
+# Two processes take turns, waiting roughly two seconds, then sleeping for two seconds
+
+export PATH="$(realpath "$(dirname "$0")/.."):$PATH"
+
+cmd1() {
+	token_id="$1"
+	while true; do
+		lock_wait="3"
+		sleep="2"
+		ts="$(date +'%T.%N')"
+		echo "${ts%??????} waiting for lock $lock_wait then sleeping for $sleep"
+		run-one -w "$lock_wait" -i "$token_id" -D /dev/stdout -- sh -c "echo 'GOT IT!'; sleep $sleep"
+		# echo "[$$] finished"
+	done
+	exit 0
+}
+
+if [ $# -eq 0 ]; then
+	token_id="$(uuidgen)"
+	tmux new-session -d -s "one-run-$$" "sleep 2; $0 $token_id" \; split-window -v "$0 $token_id" \; attach
+	exit 0
+fi
+
+cmd1 "$@"

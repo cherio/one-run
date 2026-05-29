@@ -1,0 +1,23 @@
+#!/bin/sh
+export PATH="$(realpath "$(dirname "$0")/.."):$PATH"
+
+cmd1() {
+	token_id="$1"
+	while true; do
+		lock_wait="$(perl -e "print int(rand(5) + 2)")"
+		sleep="$(perl -e "print int(rand(10))")"
+		ts="$(date +'%T.%N')"
+		echo "${ts%??????} waiting for lock $lock_wait then sleeping for $sleep"
+		run-one -w "$lock_wait" -i "$token_id" -D /dev/stdout -- sleep "$sleep"
+		# echo "[$$] finished"
+	done
+	exit 0
+}
+
+if [ $# -eq 0 ]; then
+	token_id="$(uuidgen)"
+	tmux new-session -d -s "one-run-$$" "$0 $token_id" \; split-window -v "$0 $token_id" \; attach
+	exit 0
+fi
+
+cmd1 "$@"

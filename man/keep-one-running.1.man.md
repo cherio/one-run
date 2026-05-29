@@ -1,6 +1,11 @@
-% keep-one-running(1) Version 1.0 | User Commands
-% Yuri Cheromushnikov
-% April 22, 2026
+---
+title: keep-one-running
+section: 1
+header: User Commands
+date: May 28, 2026
+footer: Version 1.0.6
+---
+
 
 # NAME
 
@@ -8,13 +13,13 @@
 
 # SYNOPSIS
 
-**keep-one-running** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**keep-one-running** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-one-constantly** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-one-constantly** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-one-until-failure** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-one-until-failure** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-one-until-success** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-one-until-success** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
 # DESCRIPTION
 
@@ -86,7 +91,7 @@ Available options are the superset of options in **run-one** and **keep-running*
 ` `
 : In other words, if a command exits immediately, it is allowed to relaunch without delay for a total of BURST attempts. Once this limit is reached, the utility enforces a mandatory RATE (in milliseconds) sleep between subsequent restarts to throttle the execution speed.
 
-**-h | --help**
+**-h | -\-help**
 : Print help information
 
 # EXAMPLES
@@ -94,8 +99,11 @@ Available options are the superset of options in **run-one** and **keep-running*
 **run-one-until-success -R 1:20000 ncat -z -w5 my-host 443**
 : make sure only one instance of ncat is running at a time; keep running it until it succeeds connecting to port 443 of my-host; limit the frequency of connectivity checks to 20 seconds
 
-**keep-one-running -u s -R 1:20000 -x -w 120 -k 60 -E 111 -D /tmp/debug.msg -- ncat -z -w5 my-host 443**
+**keep-one-running -u s -R 1:20000 -x -w 120 -k 60 -E 111 -D /tmp/debug.msg -\- ncat -z -w5 my-host 443**
 : same as the previous one, but in addition does this: terminates other instances of this command that held the lock waiting 2 min total for the other process to terminate and additionally sends SIGKILL to it after 1 min of waiting; uses exit code 111 in case the utility encounters an internal error; dumps some debug/status information in /tmp/debug.msg.
+
+**run-one-until-success -R 0:5000 wg-quick up wg0**
+: This could run upon boot if the interface depends on an unstable (e.g. Wi-Fi) connection that takes time to establish. It attempts to bring up a wireguard tunnel, retrying every 5 seconds until it succeeds.
 
 # EXIT STATUS
 
@@ -108,6 +116,13 @@ Available options are the superset of options in **run-one** and **keep-running*
 Exit code 123 is returned the utility itself encounters an abnormal situation, e.g. when a parameter is invalid of flock fails. This code is customizable with -E option.
 
 Exit code from **run-one-until-failure** is never zero. It is either 123 (customizable) or it is the exit code returned from the user command.
+
+# AUTHORS
+Yuri Cherio
+
+# COPYRIGHT
+Copyright (C) 2026 The Utility Project Contributors\
+SPDX-License-Identifier: GPL-3.0-or-later
 
 # SEE ALSO
 

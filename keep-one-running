@@ -2,38 +2,41 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Yuri Cherio
 
-unset terminate_others # run-this-one flag
-unset debug_file_path # Log debug information in it
+unset wait_lock # wait for the lock to become available before quitting or killing others
+unset wait_term # run-this-one: keep sending SIGTERM for this long
+unset wait_kill # run-this-one: keep sending SIGKILL for this long
+unset run_anyway # run another instance after lock timeout no matter what
+unset lock_token # Use this token instead of calculating user command hash
+
 unset respawn_count_max # Maximum number of times to respawn the process
 unset rate_limit_spec # User command rate limit spec, format: <bursts>:<rate_ms>
-unset fail_exit_code # Custom flock error exit code
-unset lock_wait # run-this-one: max time to wait for the lock before giving up
-unset kill_wait # run-this-one: send SIGKILL to the lock holder after this secs
-unset lock_token # Use this token instead of calculating user command hash
 unset run_until # values 's' or 'f' mean run until success|failure
-unset run_anyway # run another instance after lock timeout no matter what
+
+unset flock_err_exit_code # Custom flock error exit code
+unset debug_file_path # Log debug information in it
 
 while [ $# -gt 0 ] ; do
 	case "$1" in
 	# use by run-one
-	-x) { terminate_others="$1"; shift; } ;; # run-this-one
-	-w) { shift; lock_wait="$1"; shift; } ;; # used with run-this-one
-	-k) { shift; kill_wait="$1"; shift; } ;; # kill the other process instances after this secs
-	-a) { run_anyway="$1"; shift; } ;;
-	-T) { shift; lock_token="$1"; shift; } ;; #
+	-w) { shift; wait_lock="$1"; } ;; # wait for the lock to become available
+	-t) { shift; wait_term="$1"; } ;; # TERM the other process instances after this secs
+	-k) { shift; wait_kill="$1"; } ;; # KILL the other process instances after this secs
+	-a) run_anyway="$1" ;;
+	-i) { shift; lock_token="$1"; } ;; # command identifier token; defaults to command hash
 	# used by keep-running
-	-r) { shift; respawn_count_max="$1"; shift; } ;; #
-	-R) { shift; rate_limit_spec="$1"; shift; } ;; # <bursts>:<rate_ms>
-	-u) { shift; run_until="$1"; shift; } ;; # s|f -> run until success|failure
+	-r) { shift; respawn_count_max="$1"; } ;; #
+	-R) { shift; rate_limit_spec="$1"; } ;; # <bursts>:<rate_ms>
+	-u) { shift; run_until="$1"; } ;; # s|f -> run until success|failure
 	# used by both run-one and keep-running
-	-D) { shift; debug_file_path="$1"; shift; } ;; #
-	-E) { shift; fail_exit_code="$1"; shift; } ;; # Custom utility error exist code
+	-E) { shift; flock_err_exit_code="$1"; } ;; # Custom utility error exist code
+	-D) { shift; debug_file_path="$1"; } ;; #
 	-h|--help) exec man -P cat "${0##*/}" ;; # Display help
 	# other options
-	'') shift ;; # Ignore empty arguments
+	'') ;; # Ignore empty arguments
 	--) { shift; break; } ;; # The rest is the user supplied command line
 	*) { break; } ;; # Beginning of the user supplied command line
 	esac
+	shift
 done
 
 _debug() {
@@ -56,11 +59,11 @@ fi
 
 _debug "Action: $action, run_until: $run_until"
 
-exec run-one $terminate_others \
-	-T "${lock_token:-$*}" \
-	-w "$lock_wait" -k "$kill_wait" $run_anyway \
-	-E "$fail_exit_code" -D "$debug_file_path" \
+exec run-one \
+	-w "$wait_lock" -t "$wait_term" -k "$wait_kill" $run_anyway \
+	-i "${lock_token:-$*}" \
+	-E "$flock_err_exit_code" -D "$debug_file_path" \
 	-- keep-running -u "$run_until" \
 	-r "$respawn_count_max" -R "$rate_limit_spec" \
-	-E "$fail_exit_code" -D "$debug_file_path" \
+	-E "$flock_err_exit_code" -D "$debug_file_path" \
 	-- "$@"

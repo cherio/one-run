@@ -1,6 +1,10 @@
-% keep-running(1) Version 1.0 | User Commands
-% Yuri Cheromushnikov
-% April 22, 2026
+---
+title: keep-running
+section: 1
+header: User Commands
+date: May 28, 2026
+footer: Version 1.0.6
+---
 
 # NAME
 
@@ -8,13 +12,13 @@
 
 # SYNOPSIS
 
-**keep-running** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**keep-running** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-constantly** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-constantly** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-until-failure** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-until-failure** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
-**run-until-success** [*OPTIONS*] ... COMMAND [*ARGS*] ...
+**run-until-success** [*OPTIONS*].\.. COMMAND [*ARGS*].\..
 
 # DESCRIPTION
 
@@ -35,7 +39,7 @@ The base form of utility simply keeps a program running, relaunching it whenever
 : limits the number of times the supplied command can be launched. By default it keeps respawning the command indefinitely.
 
 **-R BURST:RATE**
-: This parameter controls the relaunch frequency. It assumes that, under normal conditions, the command will not terminate often. BURST - The number of times the command can relaunch immediately before throttling begins. RATE - The minimum required interval (in ms) between relaunches once the burst is exhausted. If BURST is 0 or 1, throttling engages immediately, ensuring the command does not restart more than once per RATE interval.
+: This parameter controls the relaunch frequency. It assumes that, under normal conditions, the command will not terminate often. BURST - The number of times the command can relaunch immediately before throttling begins. RATE - The minimum required interval (in ms) between relaunches once the burst is exhausted. If BURST is 0 or 1, throttling engages immediately, ensuring the command does not restart more than once per RATE interval. The default is 16:1000 (a initial burst of 16 with subsequent throttling to launching a new instance not more frequently than once per second)
 
 ` `
 : In other words, if a command exits immediately, it is allowed to relaunch without delay for a total of BURST attempts. Once this limit is reached, the utility enforces a mandatory RATE (in milliseconds) sleep between subsequent restarts to throttle the execution speed.
@@ -46,7 +50,7 @@ The base form of utility simply keeps a program running, relaunching it whenever
 **-D PATH**
 : debug/log file path.
 
-**-h | --help**
+**-h | -\-help**
 : Print help information
 
 # EXAMPLES
@@ -54,6 +58,8 @@ The base form of utility simply keeps a program running, relaunching it whenever
 **keep-running -R 10:2000 -r 2000 my-favorite-watchdog arg1**
 : keeps relaunching the user process allowing up to 2000 respawns; applies rate limiting for frequent command restarts allowing 10 relaunches in one single initial burst (when a process exists very frequently/instantly and gets relaunched immediately) and then limiting the frequency of respawns to minimum 2000 milliseconds between launches, pausing/sleeping in between.
 
+**run-constantly tail -f /path/to/log-file**
+: this one is useful if log file is rotated by the utility that writes the log (some versions of tail lose track of the file descriptor when it is rotated)
 
 # EXIT STATUS
 
@@ -65,6 +71,13 @@ The base form of utility simply keeps a program running, relaunching it whenever
 Exit code 123 is returned when the utility itself encounters an abnormal situation, e.g. when a parameter is invalid of respawn count is exceeded. This code is customizable with -E option.
 
 Exit code from **run-until-failure** is never zero. It is either 123 (customizable) or it is the exit code returned by the user command.
+
+# AUTHORS
+Yuri Cherio
+
+# COPYRIGHT
+Copyright (C) 2026 The Utility Project Contributors\
+SPDX-License-Identifier: GPL-3.0-or-later
 
 # SEE ALSO
 
